@@ -93,4 +93,7 @@ if __name__ == "__main__":
     print("\nMạng sau khi xóa node 9:")
     chord.print_nodes()
 
+    chord.add_node(6)
+    print("\nMạng sau khi thêm node 6:")
+    chord.print_nodes()
    
