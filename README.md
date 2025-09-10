@@ -1,1 +1,1 @@
-# KtChord
+# BÀI KIỂM TRA CHORD
