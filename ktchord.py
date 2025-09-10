@@ -1,4 +1,4 @@
-# chord_network_with_remove.py
+# chord_network_full.py
 
 class Node:
     def __init__(self, node_id):
@@ -75,13 +75,13 @@ class ChordNetwork:
 if __name__ == "__main__":
     chord = ChordNetwork()
 
-    # Thêm node [1,5,9,12]
+    # 1. Thêm node [1,5,9,12]
     for n_id in [1,5,9,12]:
         chord.add_node(n_id)
     print("Mạng sau khi thêm node:")
     chord.print_nodes()
 
-    # Chèn key {2:'A',7:'B',10:'C',14:'D'}
+    # 2. Chèn key {2:'A',7:'B',10:'C',14:'D'}
     keys = {2:'A', 7:'B', 10:'C', 14:'D'}
     for k, v in keys.items():
         node = chord.insert_key(k, v)
@@ -90,7 +90,10 @@ if __name__ == "__main__":
     print("\nMạng sau khi insert key:")
     chord.print_nodes()
 
-    
     chord.remove_node(9)
     print("\nMạng sau khi xóa node 9:")
+    chord.print_nodes()
+
+    chord.add_node(6)
+    print("\nMạng sau khi thêm node 6:")
     chord.print_nodes()
