@@ -1,133 +1,138 @@
+# chord_network.py
+
 class Node:
-    def __init__(self, node_id, m, replication=2):
+    def __init__(self, node_id, m):
         self.id = node_id
         self.m = m
-        self.max_id = 2 ** m
-        self.fingers = []
-        self.network = None
-        self.data = {}
-        self.replication = replication
+        self.finger_table = [None] * m
+        self.successor = None
+        self.keys = {}  # lưu key-value
 
-    def set_network(self, network):
-        self.network = network
-
-    def build_fingers(self):
-        """Xây dựng finger table"""
-        self.fingers.clear()
-        for i in range(self.m):
-            start = (self.id + 2**i) % self.max_id
-            succ = self.network.find_successor(start)
-            self.fingers.append((start, succ.id))
-
-    def find_successor(self, key):
-        """Tìm successor gần nhất cho key"""
-        sorted_nodes = sorted(self.network.nodes, key=lambda n: n.id)
-        for node in sorted_nodes:
-            if node.id >= key:
-                return node
-        return sorted_nodes[0]
-
-    def store_key(self, key, value):
-        """Lưu dữ liệu với replication"""
-        main_node = self.find_successor(key)
-        nodes = self.network.get_successor_list(main_node, self.replication)
-        for n in nodes:
-            n.data[key] = value
-        return nodes
-
-    def find_key(self, key):
-        """Tra cứu key"""
-        for n in self.network.nodes:
-            if key in n.data:
-                return n.data[key], n
-        return None, None
-
-    def migrate_keys(self):
-        """Khi node join: lấy lại key thuộc về node mới"""
-        succ = self.find_successor((self.id + 1) % self.max_id)
-        keys_to_move = [k for k in succ.data if self.id >= k or (self.id < succ.id and k <= self.id)]
-        for k in keys_to_move:
-            self.data[k] = succ.data.pop(k)
-
-    def route_lookup(self, start_node, key):
-        """Mô phỏng đường đi lookup"""
-        path = [start_node.id]
-        current = start_node
-        while True:
-            succ = current.find_successor(key)
-            if succ.id == current.id:
-                return path, succ
-            path.append(succ.id)
-            if succ.id >= key or succ.id == self.network.nodes[0].id:
-                return path, succ
-            current = succ
-
+    def __str__(self):
+        return f"Node({self.id})"
 
 class ChordNetwork:
-    def __init__(self, m, replication=2):
+    def __init__(self, m):
         self.m = m
         self.nodes = []
-        self.replication = replication
 
     def add_node(self, node_id):
-        """Thêm node mới vào vòng"""
-        node = Node(node_id, self.m, self.replication)
-        self.nodes.append(node)
-        for n in self.nodes:
-            n.set_network(self)
-        self.stabilize()
-        node.migrate_keys()  # lấy lại dữ liệu thuộc về node mới
-        return node
+        new_node = Node(node_id, self.m)
+        self.nodes.append(new_node)
+        self.nodes.sort(key=lambda n: n.id)
+        self.update_successors()
+        self.update_finger_tables()
+        self.migrate_keys()
+        return new_node
 
     def remove_node(self, node_id):
-        """Xóa node và chuyển dữ liệu cho successor"""
-        node = next((n for n in self.nodes if n.id == node_id), None)
-        if not node:
-            return
-        succ = node.find_successor((node.id + 1) % node.max_id)
-        for k, v in node.data.items():
-            succ.data[k] = v
-        self.nodes.remove(node)
-        self.stabilize()
+        node = self.get_node(node_id)
+        if node:
+            # chuyển key sang successor
+            for k, v in node.keys.items():
+                node.successor.keys[k] = v
+            self.nodes.remove(node)
+            self.update_successors()
+            self.update_finger_tables()
 
-    def get_successor_list(self, node, count):
-        """Trả về danh sách successor"""
-        sorted_nodes = sorted(self.nodes, key=lambda n: n.id)
-        idx = sorted_nodes.index(node)
-        result = []
-        for i in range(count):
-            result.append(sorted_nodes[(idx + i) % len(sorted_nodes)])
-        return result
+    def get_node(self, node_id):
+        for node in self.nodes:
+            if node.id == node_id:
+                return node
+        return None
+
+    def update_successors(self):
+        n = len(self.nodes)
+        for i, node in enumerate(self.nodes):
+            node.successor = self.nodes[(i+1)%n]
+
+    def update_finger_tables(self):
+        N = 2 ** self.m
+        for node in self.nodes:
+            for i in range(self.m):
+                start = (node.id + 2**i) % N
+                node.finger_table[i] = self.find_successor(start)
 
     def find_successor(self, key):
-        if not self.nodes:
-            return None
-        return self.nodes[0].find_successor(key)
+        for node in self.nodes:
+            if node.id >= key:
+                return node
+        return self.nodes[0]  # quay vòng
 
-    def stabilize(self):
-        """Cập nhật finger table cho toàn mạng"""
-        for n in self.nodes:
-            n.build_fingers()
+    def insert_key(self, key, value):
+        node = self.find_successor(key)
+        node.keys[key] = value
+        return node
 
-    def print_data_distribution(self):
-        print("=== Phân phối dữ liệu ===")
-        for node in sorted(self.nodes, key=lambda n: n.id):
-            print(f"Node {node.id}: {node.data}")
-        print()
+    def lookup_key(self, start_node_id, key):
+        path = []
+        node = self.get_node(start_node_id)
+        while True:
+            path.append(node.id)
+            if key in node.keys:
+                return node, path
+            # đi tới finger gần nhất <= key
+            next_node = None
+            for i in reversed(range(self.m)):
+                finger = node.finger_table[i]
+                if finger.id <= key and finger.id != node.id:
+                    next_node = finger
+                    break
+            if not next_node:
+                next_node = node.successor
+            if next_node == node:
+                return None, path
+            node = next_node
 
-    def print_statistics(self):
-        """Thống kê hệ thống"""
-        print("=== Statistics ===")
-        print(f"Tổng số node: {len(self.nodes)}")
-        total_keys = sum(len(n.data) for n in self.nodes)
-        print(f"Tổng số key: {total_keys}")
-        for n in sorted(self.nodes, key=lambda n: n.id):
-            print(f"Node {n.id} giữ {len(n.data)} key")
-        print()
+    def migrate_keys(self):
+        # đơn giản: đảm bảo node nhận key thuộc về nó
+        for node in self.nodes:
+            succ = node.successor
+            keys_to_move = {}
+            for k, v in succ.keys.items():
+                if node.id >= k or node.id < succ.id:
+                    keys_to_move[k] = v
+            for k in keys_to_move:
+                node.keys[k] = keys_to_move[k]
+                del succ.keys[k]
 
-    def visualize(self):
-        """Bỏ phần vẽ, chỉ in danh sách node"""
-        print("=== Nodes trong mạng Chord ===")
-        for n in sorted(self.nodes, key=lambda n: n.id):
-            print(f"- Node {n.id}")
-        print()
+    def print_nodes(self):
+        for node in self.nodes:
+            print(f"Node {node.id} -> Successor {node.successor.id}, Keys: {list(node.keys.keys())}")
+
+# ===== TEST CASE =====
+if __name__ == "__main__":
+    chord = ChordNetwork(m=4)
+    # thêm node
+    chord.add_node(1)
+    chord.add_node(5)
+    chord.add_node(9)
+    chord.add_node(12)
+    print("Mạng sau khi thêm node:")
+    chord.print_nodes()
+
+    # insert key
+    keys = {2:'A', 7:'B', 10:'C', 14:'D'}
+    for k, v in keys.items():
+        node = chord.insert_key(k, v)
+        print(f"Insert key {k} vào Node {node.id}")
+
+    print("\nMạng sau khi insert key:")
+    chord.print_nodes()
+
+    # lookup key
+    key_to_lookup = 10
+    start_node = 1
+    node, path = chord.lookup_key(start_node, key_to_lookup)
+    print(f"\nLookup key {key_to_lookup} từ node {start_node}:")
+    print(f"Đường đi: {path}, Tìm thấy tại node {node.id}")
+
+    # node join
+    chord.add_node(6)
+    print("\nMạng sau khi node 6 join:")
+    chord.print_nodes()
+
+    # node leave
+    chord.remove_node(5)
+    print("\nMạng sau khi node 5 leave:")
+    chord.print_nodes()
