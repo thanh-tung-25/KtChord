@@ -1,10 +1,10 @@
-# chord_network_simple.py
+
 
 class Node:
     def __init__(self, node_id):
         self.id = node_id
         self.successor = None
-        self.keys = {}  # lưu key-value
+        self.keys = {}
 
     def __str__(self):
         return f"Node({self.id})"
@@ -13,7 +13,7 @@ class ChordNetwork:
     def __init__(self):
         self.nodes = []
 
-    # Thêm node
+
     def add_node(self, node_id):
         new_node = Node(node_id)
         self.nodes.append(new_node)
@@ -22,20 +22,20 @@ class ChordNetwork:
         self.redistribute_keys()
         return new_node
 
-    # Helper: tìm node theo ID
+
     def get_node(self, node_id):
         for node in self.nodes:
             if node.id == node_id:
                 return node
         return None
 
-    # Cập nhật successor
+
     def update_successors(self):
         n = len(self.nodes)
         for i, node in enumerate(self.nodes):
             node.successor = self.nodes[(i + 1) % n]
 
-    # Chèn key
+
     def insert_key(self, key, value):
         for node in self.nodes:
             if node.id >= key:
@@ -44,7 +44,7 @@ class ChordNetwork:
         self.nodes[0].keys[key] = value
         return self.nodes[0]
 
-    # Phân phối lại key sau thêm node
+
     def redistribute_keys(self):
         all_keys = {}
         for node in self.nodes:
@@ -53,23 +53,23 @@ class ChordNetwork:
         for k, v in all_keys.items():
             self.insert_key(k, v)
 
-    # Hiển thị mạng
+
     def print_nodes(self):
         for node in self.nodes:
             print(f"Node {node.id} -> Successor {node.successor.id}, Keys: {list(node.keys.keys())}")
 
 
-# ===== TEST CASE =====
+
 if __name__ == "__main__":
     chord = ChordNetwork()
 
-    # 1. Thêm node [1,5,9,12]
+
     for n_id in [1, 5, 9, 12]:
         chord.add_node(n_id)
     print("Mạng sau khi thêm node:")
     chord.print_nodes()
 
-    # 2. Chèn key {2:'A',7:'B',10:'C',14:'D'}
+   
     keys = {2:'A', 7:'B', 10:'C', 14:'D'}
     for k, v in keys.items():
         node = chord.insert_key(k, v)
